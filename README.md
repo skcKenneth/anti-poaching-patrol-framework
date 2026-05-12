@@ -13,34 +13,71 @@ This repository implements a three-layer pipeline that addresses two interlinked
 1. **Where** should a limited ranger workforce be deployed to maximise conservation return?
 2. **How many** rangers are dynamically sufficient to prevent prey population decline?
 
-All modelling choices are explicit and auditable. No black-box ML/DL is used.
+Three analytical enhancements go beyond the base three-layer pipeline:
+
+| Enhancement | Description | Key file |
+|-------------|-------------|----------|
+| **Self-consistent loop** | Iterates Layers 1–2–3 until deployment converges to a fixed-point equilibrium | `src/feedback_loop.py` |
+| **Multi-objective Pareto** | Explicitly trades capture efficiency vs. patrol equity; identifies the knee point | `visualizations/enhanced_figures.py` |
+| **GBIF data anchoring** | Integrates real *Diceros bicornis* occurrence records (103 within Etosha bbox) from GBIF as a spatial prior | `data/fetch_real_data.py` |
 
 ---
 
 ## Framework Architecture
 
 ```
-Layer 1 — WPP Field (wpp_maut_engine.py)
+Layer 1 — WPP Field (src/wpp_maut_engine.py)
     Ecological priority map using nonlinear MAUT:
     • Endangered utility:  U_R = 1 − exp(−α · max(N − N_crit, 0) / N_init,R)
     • Abundant utility:    U_E = ln(1 + κN) / ln(1 + κN_init,E)
     • Waterhole attraction: Σ_h 10 · exp(−0.5 · d_h)
     • NHPP threat intensity: λ(s,t) = λ₀(t) · exp(β⊤ X(s,t))
     • Weighted combination: WPP = (0.65·U_R + 0.35·U_E) · attraction · (1 + λ)
-         ↓
-Layer 2 — Spatial Allocation (ssg_dro_optimizer.py)
+    • Optional GBIF prior: WPP ← WPP · (1 + occurrence_density)
+         ↓  ↑  [feedback loop updates λ₀ based on Z*]
+Layer 2 — Spatial Allocation (src/ssg_dro_optimizer.py)
     SLSQP optimisation of WPP-weighted interception objective:
     • max Σᵢ (1 − exp(−λ_det · τᵢ / μᵢ)) · WPPᵢ
     • subject to: Σ τᵢ = 295, 0 ≤ τᵢ ≤ 50
-    • Technology: λ_full = 0.25 (full tech), λ_low = 0.08 (degraded)
-    • Seasonal friction: μ_savanna = 1.0, μ_pan,dry = 3.0, μ_pan,wet = 15.0
          ↓
-Layer 3 — Stability Analysis (jacobian_stability.py)
+Layer 3 — Stability Analysis (src/jacobian_stability.py)
     3D prey–predator–poacher ODE system:
     • Ṅ = rN(1 − N/K) − α_pred·NP − α_poach·NZ
     • Ṗ = η·NP − m·P
     • Ż = ρ·NZ − σ·τ·Z − m_z·Z
-    Jacobian eigenvalue crossing identifies the critical staffing threshold T*
+    Jacobian eigenvalue crossing identifies critical staffing threshold T*
+    Equilibrium Z* fed back to update Layer 1 threat intensity
+```
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/skckenneth/anti-poaching-patrol-framework.git
+cd anti-poaching-patrol-framework
+pip install -r requirements.txt
+
+# Run base pipeline
+python main.py --mode all
+
+# Run three analytical enhancements
+python run_enhancements.py
+```
+
+All outputs are written to `outputs/`.
+
+---
+
+## Run Modes
+
+```bash
+python main.py --mode baseline    # Layer 1-3 baseline + stability threshold
+python main.py --mode seasonal    # Dry vs wet season deployment comparison
+python main.py --mode tech        # Technology degradation sensitivity
+python main.py --mode global      # Congo + Himalaya adaptation probes
+python main.py --mode enhanced    # All three enhancements (feedback loop, Pareto, GBIF)
+python main.py --mode all         # Everything
 ```
 
 ---
@@ -86,44 +123,11 @@ Layer 3 — Stability Analysis (jacobian_stability.py)
 | `sigma_suppression` | 450.0 | Ranger suppression coefficient |
 | `m_poacher` | 0.06 | Poacher natural exit rate |
 
-All parameters are stored in `data/raw_pdf_specs.json`.
-
----
-
-## Installation
-
-```bash
-git clone https://github.com/skckenneth/anti-poaching-patrol-framework.git
-cd anti-poaching-patrol-framework
-pip install -r requirements.txt
-```
-
-**Requirements:** Python 3.10+, numpy, scipy, matplotlib, seaborn
-
----
-
-## Usage
-
-Run the full pipeline (all experiments, all figures):
-
-```bash
-python main.py --mode all
-```
-
-Run individual modules:
-
-```bash
-python main.py --mode baseline   # Layer 1-3 baseline + stability threshold
-python main.py --mode seasonal   # Dry vs wet season deployment comparison
-python main.py --mode tech       # Technology degradation sensitivity
-python main.py --mode global     # Congo + Himalaya adaptation probes
-```
-
-All outputs are written to `outputs/`.
-
 ---
 
 ## Output Files
+
+### Base pipeline (`python main.py --mode all`)
 
 | File | Description |
 |------|-------------|
@@ -136,10 +140,32 @@ All outputs are written to `outputs/`.
 | `tech_degradation.png` | Interception loss under λ degradation |
 | `topology_wpp_3d_surface.png` | 3D WPP field surface |
 | `voronoi_patrol_zones.png` | Voronoi patrol sector partition |
-| `pareto_front.png` | Capture–equity Pareto frontier |
-| `scenario_radar.png` | Multi-metric scenario comparison |
-| `evaluation_summary.json` | All numeric metrics |
-| `run_metrics.json` | Pipeline run output summary |
+| `run_metrics.json` | All pipeline metrics |
+
+### Enhancements (`python run_enhancements.py`)
+
+| File | Description |
+|------|-------------|
+| `feedback_convergence.png` | 4-panel convergence diagnostics for the feedback loop |
+| `feedback_deployment_comparison.png` | Open-loop vs self-consistent deployment maps |
+| `gbif_wpp_overlay.png` | GBIF occurrence density vs WPP (with and without prior) |
+| `pareto_frontier_enhanced.png` | Pareto frontier with knee point, baseline, and feedback solutions |
+| `enhancement_metrics.json` | All scalar metrics from the three enhancements |
+
+---
+
+## GBIF Data
+
+Real *Diceros bicornis* occurrence records are fetched automatically from the GBIF API on first run and cached at `data/gbif_rhino_cache.json`. The dataset contains:
+
+- **162 total** southern Africa records
+- **155 Namibia** records
+- **103 records** within the Etosha bounding box (lat −19.25 to −18.20, lon 15.60 to 16.55)
+- Year range: 2023–2026
+
+To refresh the cache: `python -c "from data.fetch_real_data import fetch_gbif_occurrences; fetch_gbif_occurrences(use_cache=False)"`
+
+**Data citation:** GBIF.org (2026). *Diceros bicornis* occurrences. [https://doi.org/10.15468/dl.XXXXXXX](https://doi.org/10.15468/dl.XXXXXXX) *(replace with actual download DOI from GBIF)*
 
 ---
 
@@ -147,61 +173,37 @@ All outputs are written to `outputs/`.
 
 ```
 anti-poaching-patrol-framework/
-├── main.py                    # Unified pipeline entrypoint
-├── scenario_runner.py         # Seasonal and tech degradation scenarios
-├── global_adaption.py         # Cross-region adaptation (Congo, Himalayas)
+├── main.py                       # Unified pipeline entrypoint
+├── run_enhancements.py           # Three analytical enhancements runner
+├── scenario_runner.py            # Seasonal and tech degradation scenarios
+├── global_adaption.py            # Cross-region adaptation (Congo, Himalayas)
 ├── requirements.txt
 ├── data/
-│   └── raw_pdf_specs.json     # All model parameters and park specs
+│   ├── raw_pdf_specs.json        # All model parameters and park specs
+│   ├── fetch_real_data.py        # GBIF occurrence fetching + grid mapping
+│   └── gbif_rhino_cache.json     # Cached GBIF records (auto-generated)
 ├── src/
-│   ├── wpp_maut_engine.py     # Layer 1: WPP field generation
-│   ├── ssg_dro_optimizer.py   # Layer 2: SLSQP patrol allocation
-│   ├── jacobian_stability.py  # Layer 3: 3D ODE stability analysis
-│   ├── rhc_temporal_shift.py  # Receding-horizon temporal weighting
-│   └── advanced_analytics.py  # Gini, Lorenz, Pareto, Monte Carlo
+│   ├── wpp_maut_engine.py        # Layer 1: WPP field generation
+│   ├── ssg_dro_optimizer.py      # Layer 2: SLSQP patrol allocation
+│   ├── jacobian_stability.py     # Layer 3: 3D ODE stability analysis
+│   ├── feedback_loop.py          # Self-consistent iterative loop (NEW)
+│   ├── rhc_temporal_shift.py     # Receding-horizon temporal weighting
+│   └── advanced_analytics.py    # Gini, Lorenz, Pareto, Monte Carlo
 ├── utils/
-│   ├── topology_constructor.py  # Etosha grid + waterhole placement
+│   ├── topology_constructor.py   # Etosha grid + waterhole placement
 │   └── spatial_friction.py      # Seasonal terrain friction maps
 ├── visualizations/
-│   ├── bifurcation_plots.py   # Stability boundary figures
-│   ├── paper_figures.py       # Phase portrait, 3D surface, Lorenz, Pareto
-│   ├── spatial_heatmaps.py    # Patrol density heatmaps
-│   └── style_guide.py         # Academic figure style (300 dpi)
-└── outputs/                   # Generated figures and metrics (gitignored)
+│   ├── enhanced_figures.py       # Convergence, Pareto, GBIF figures (NEW)
+│   ├── bifurcation_plots.py      # Stability boundary figures
+│   ├── paper_figures.py          # Phase portrait, 3D surface, Lorenz, Pareto
+│   ├── spatial_heatmaps.py       # Patrol density heatmaps
+│   └── style_guide.py            # Academic figure style (300 dpi)
+└── outputs/                      # Generated figures and metrics (gitignored)
 ```
-
----
-
-## Reproducing Paper Results
-
-The figures in the associated preprint are generated by:
-
-```bash
-python main.py --mode all
-```
-
-Expected runtime: approximately 2–5 minutes on a standard laptop.
-
-The critical staffing threshold T* is printed to stdout and saved in `outputs/run_metrics.json` under the key `critical_staff_threshold`.
-
----
-
-## Notes on Modelling Choices
-
-**Why SLSQP instead of Wasserstein DRO?**
-The spatial allocation (Layer 2) uses `scipy.optimize.minimize` with SLSQP, which optimises the deterministic WPP-weighted interception objective directly. This is computationally tractable and transparent. A full Wasserstein DRO dual reformulation (Esfahani & Kuhn 2018) would add robustness against distributional ambiguity in the poaching incident distribution; this is noted as a future extension.
-
-**Why 3D ODE in Layer 3?**
-The stability analysis uses a three-population system (prey × natural predator × poacher) rather than a simplified 2D prey–poacher model. Including the predator compartment captures the ecological reality that lion and leopard populations in Etosha interact with prey dynamics on the same timescale as poaching pressure.
-
-**Grid resolution**
-The default grid uses 5 km × 5 km cells (resulting in a 30 × 30 grid for Etosha's ~22,935 km²). This is deliberately coarser than a 1 km × 1 km grid to keep the SLSQP problem tractable; results are qualitatively robust to resolution changes.
 
 ---
 
 ## Citation
-
-If you use this code, please cite the associated preprint:
 
 ```bibtex
 @misc{chan2026antipoaching,
@@ -220,4 +222,4 @@ If you use this code, please cite the associated preprint:
 
 ## Licence
 
-This code is released under the [Creative Commons Attribution 4.0 International (CC-BY 4.0)](LICENSE) licence, consistent with the associated preprint.
+[Creative Commons Attribution 4.0 International (CC-BY 4.0)](LICENSE)

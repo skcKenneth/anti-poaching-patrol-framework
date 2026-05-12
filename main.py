@@ -10,6 +10,7 @@ from typing import Dict
 import numpy as np
 
 from global_adaption import run_global_adaptation
+from run_enhancements import run_enhancements
 from scenario_runner import run_model_evaluation_suite, run_season_comparison, run_tech_degradation
 from src.advanced_analytics import compute_fairness_metrics, weighted_capture_score, weighted_interception_rate
 from src.jacobian_stability import StabilityEngine
@@ -87,6 +88,9 @@ def run_pipeline(mode: str = "all") -> Dict[str, float]:
 
     if mode in {"tech", "all"}:
         metrics.update(run_tech_degradation(topology, wpp_engine, output_dir))
+
+    if mode in {"enhanced", "all"}:
+        metrics.update(run_enhancements(topology, wpp_engine, output_dir))
 
     if mode in {"global", "all"}:
         metrics.update(run_global_adaptation(topology, output_dir))
@@ -214,7 +218,7 @@ def _build_cli() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mode",
         default="all",
-        choices=["baseline", "seasonal", "tech", "global", "all"],
+        choices=["baseline", "seasonal", "tech", "global", "enhanced", "all"],
         help="Pipeline mode selector.",
     )
     return parser
