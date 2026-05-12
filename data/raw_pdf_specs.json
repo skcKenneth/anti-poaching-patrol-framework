@@ -1,0 +1,93 @@
+{
+  "park_identity": {
+    "name": "Etosha National Park",
+    "location": "Namibia",
+    "total_area_km2": 22935,
+    "description": "Large-scale protected area with heterogeneous terrain."
+  },
+  "infrastructure": {
+    "road_length_km": 3551,
+    "fence_perimeter_km": 850,
+    "waterholes": {
+      "total_count": 86,
+      "types": [
+        "natural",
+        "man-made"
+      ],
+      "strategic_value": "Core attractors for wildlife aggregation and poaching risk."
+    },
+    "etosha_pan": {
+      "area_km2": 4800,
+      "terrain": "salt pan",
+      "mobility_impact": "Seasonal friction escalation under wet conditions."
+    }
+  },
+  "resources": {
+    "total_personnel": 295,
+    "annual_visitors": 200000,
+    "available_tech": [
+      "satellite surveillance",
+      "aerial drones",
+      "ground ranger teams"
+    ]
+  },
+  "friction_parameters": {
+    "savanna_mu": 1.0,
+    "pan_mu_dry": 3.0,
+    "pan_mu_wet": 15.0,
+    "congo_mu": 8.0,
+    "himalaya_corridor_mu": 2.0,
+    "himalaya_off_corridor_mu": 50.0
+  },
+  "model_parameters": {
+    "alpha": 0.08,
+    "kappa": 0.02,
+    "n_crit": 120.0,
+    "n_initial_endangered": 300.0,
+    "n_initial_abundant": 2500.0,
+    "lambda_full_tech": 0.25,
+    "lambda_low_tech": 0.08,
+    "nhpp_beta": [
+      -0.45,
+      -0.25,
+      -0.15,
+      -0.18
+    ],
+    "nhpp_lambda0_dry": 0.55,
+    "nhpp_lambda0_wet": 0.35
+  },
+  "conservation_priorities": {
+    "high_risk": {
+      "species": [
+        "Black Rhinoceros"
+      ],
+      "threat": "Ongoing high-value poaching pressure.",
+      "utility_weight": 0.95
+    },
+    "keystone": {
+      "species": [
+        "Elephants"
+      ],
+      "population_estimate": 2500,
+      "status": "Abundant",
+      "utility_weight": 0.6
+    },
+    "predators": {
+      "species": [
+        "Lions",
+        "Leopards",
+        "Cheetahs"
+      ],
+      "status": "Key predator community",
+      "utility_weight": 0.75
+    },
+    "general_biodiversity": {
+      "mammal_species_count": 114,
+      "bird_species_count": 400
+    }
+  },
+  "natural_threats": {
+    "wildfires": "Seasonal wildfire impact on carrying capacity and movement.",
+    "human_wildlife_interaction": "Boundary and road-adjacent conflict events."
+  }
+}
